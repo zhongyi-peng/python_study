@@ -1,0 +1,46 @@
+# 主测试
+# https://docs.python.org/2/library/json.html
+import sys
+import json
+import vertica_python
+import time
+from pykafka import KafkaClient
+
+# 显示当前时间
+print('开始时间', time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
+print(sys.getdefaultencoding())
+client = KafkaClient(hosts="192.168.")  # 可接受多个Client这是重点
+# client.topics  # 查看所有topic
+topic = client.topics[b'topic_postbe']  # 选择一个topic
+consumer = topic.get_simple_consumer()
+conn_info = { 'read_timeout': 600, 'unicode_error': 'strict', 'ssl': False}
+# simple connection, with manual close
+connection = vertica_python.connect(**conn_info)
+cur = connection.cursor()
+cur.execute("truncate table  kafka.kafka_postbe_python_offset;")
+a_error_count = 0
+#  a_offset_start = int(18)  # 从a_offset_start开始读数据
+#  a_offset_end = int(20)  # 读到a_offset_end结束读数据
+a_success = 0
+a_failed = 0
+str1='a'
+for message in consumer:  # 循环0
+    if message is not None:
+        try:
+            a = message.value.decode('UTF-8')
+            b = json.loads(a)
+            c = message.offset
+            str1 = 'insert into 1(offsets,ipaddr,version,app_client,app_platform,app_version,function_id,hdserial,datetime,uid,model,channel,mer_id,user_no,insert_datetime,str_array)'\
+                   + 'values'+" " + "('" + str(c) + "','" + \
+                   str(b['ipaddr']), b['version'], b['app_client'], b['app_platform'], \
+                   b['app_version'], b['function_id'], b['hdserial'], b['datetime'], \
+                   b['uid'], b['model'], b['channel'], b['mer_id'], b['user_no'], \
+                   b['insert_datetime'], b['str_array']+"';"
+            print(str1)
+            cur.execute(str1)
+            cur.execute("commit;")
+            a_success += 1
+            break
+        except:
+            continue
+            a_failed += 1
